@@ -1,0 +1,23 @@
+{
+  "name": "@castoapp/glock",
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/server/start.ts",
+    "build:client": "cd src/client && npx tsc -p tsconfig.json",
+    "start:client": "cd src/client && http-server ."
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "ffmpeg-static": "^5.2.0",
+    "node-datachannel": "^0.20.0-alpha.2",
+    "tsx": "^4.19.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/webrtc": "^0.0.44",
+    "@types/ws": "^8.5.12",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
+  }
+}

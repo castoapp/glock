@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>glock demo</title>
+  </head>
+  <body>
+    <video
+      id="videoElement"
+      src="video.mp4"
+      loop
+      autoplay
+      style="width: 640px; height: 360px"
+    ></video>
+    <br />
+    <button id="connectBtn">Start</button>
+    <button id="disconnectBtn" disabled>Stop</button>
+    <div id="status"></div>
+    <div id="messages"></div>
+
+    <script type="module">
+      import Client from "../dist/client.js";
+
+      const videoElement = document.getElementById("videoElement");
+      const statusDiv = document.getElementById("status");
+      const messagesDiv = document.getElementById("messages");
+      const connectBtn = document.getElementById("connectBtn");
+      const disconnectBtn = document.getElementById("disconnectBtn");
+
+      let client;
+
+      connectBtn.addEventListener("click", async () => {
+        statusDiv.textContent = "Connecting...";
+        connectBtn.disabled = true;
+
+        // Capture stream from video element
+        const stream = videoElement.captureStream(30);
+
+        // Replace with your actual WebSocket server URL and auth key
+        client = new Client("ws://localhost:8080", stream, {
+          debug: false,
+          authKey: "your-secret-auth-key",
+        });
+
+        client.onStatusChange = (status) => {
+          statusDiv.textContent = status;
+          if (status === "connected") {
+            disconnectBtn.disabled = false;
+            videoElement.play();
+          } else {
+            disconnectBtn.disabled = true;
+          }
+        };
+
+        client.onMessage = (message) => {
+          const messageElement = document.createElement("p");
+          messageElement.textContent = `Received: ${message}`;
+          messagesDiv.appendChild(messageElement);
+        };
+
+        await client.connect();
+      });
+
+      disconnectBtn.addEventListener("click", () => {
+        if (client) {
+          client.disconnect();
+          connectBtn.disabled = false;
+          disconnectBtn.disabled = true;
+          videoElement.pause();
+        }
+      });
+    </script>
+  </body>
+</html>
