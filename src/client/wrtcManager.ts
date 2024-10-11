@@ -24,6 +24,10 @@ export default class WebRTCManager {
   private initializePeerConnection() {
     this.peerConnection = new RTCPeerConnection({
       iceServers: this.iceServers,
+      iceTransportPolicy: "all",
+      bundlePolicy: "max-bundle",
+      rtcpMuxPolicy: "require",
+      iceCandidatePoolSize: 0,
     });
 
     this.peerConnection.onicecandidate = (event) => {
@@ -38,7 +42,12 @@ export default class WebRTCManager {
       }
     };
 
-    this.dataChannel = this.peerConnection.createDataChannel("dataChannel");
+    this.dataChannel = this.peerConnection.createDataChannel("dataChannel", {
+      ordered: false, // Disable ordering to allow out-of-order delivery
+      maxRetransmits: 0, // Disable retransmissions
+      protocol: "glock",
+    });
+
     this.setupDataChannel();
   }
 

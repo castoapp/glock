@@ -19,6 +19,10 @@ export default class Client {
   private authKey: string;
   private mediaRecorder: MediaRecorder | null = null;
   public status: string = "disconnected";
+  private videoBuffer: Blob[] = [];
+  private bufferSize = 5; // Number of chunks to buffer before sending
+  private isProcessingBuffer = false;
+  private lastProcessingTime = performance.now();
 
   onOpen: (() => void) | null = null;
   onClose: (() => void) | null = null;
@@ -40,7 +44,8 @@ export default class Client {
     this.wsManager.connect();
   }
 
-  public disconnect() {
+  public async disconnect() {
+    await this.processBuffer(); // Ensure all chunks are sent
     this.stopVideoStreaming();
     this.webRTCManager.close();
     this.wsManager.disconnect();
@@ -83,19 +88,15 @@ export default class Client {
 
   private async startRecorder() {
     try {
-      const videoTracks = this.stream.getVideoTracks();
-      const audioTracks = this.stream.getAudioTracks();
-
       if (this.options.debug) {
-        console.log("[Glock] Video tracks:", videoTracks);
-        console.log("[Glock] Audio tracks:", audioTracks);
+        console.log("[Glock] Video tracks:", this.stream.getVideoTracks());
+        console.log("[Glock] Audio tracks:", this.stream.getAudioTracks());
       }
 
-      if (videoTracks.length === 0) {
+      if (this.stream.getVideoTracks().length === 0) {
         throw new Error("[Glock] No video track found in the captured stream");
       }
 
-      // Try different MIME types
       const mimeTypes = [
         "video/webm;codecs=vp9,opus",
         "video/webm;codecs=vp8,opus",
@@ -103,13 +104,9 @@ export default class Client {
         "video/mp4;codecs=h264,aac",
       ];
 
-      let selectedMimeType;
-      for (const mimeType of mimeTypes) {
-        if (MediaRecorder.isTypeSupported(mimeType)) {
-          selectedMimeType = mimeType;
-          break;
-        }
-      }
+      const selectedMimeType = mimeTypes.find((type) =>
+        MediaRecorder.isTypeSupported(type)
+      );
 
       if (!selectedMimeType) {
         throw new Error(
@@ -122,49 +119,81 @@ export default class Client {
 
       this.mediaRecorder = new MediaRecorder(this.stream, {
         mimeType: selectedMimeType,
-        videoBitsPerSecond: 20971520,
+        videoBitsPerSecond: 1500000, // 1.5Mbps for a balance of quality and performance
       });
 
       if (this.options.debug)
         console.log("[Glock] MediaRecorder created:", this.mediaRecorder);
 
-      this.mediaRecorder.ondataavailable = async (event) => {
-        // console.log("ondataavailable event triggered", event);
-        if (event.data && event.data.size > 0) {
-          if (this.options.debug)
-            console.log(
-              "[Glock] Video data available, size:",
-              event.data.size,
-              "bytes"
-            );
-          if (this.webRTCManager && this.webRTCManager.isConnected()) {
-            // 0x41 = AV chunk
-            await this.webRTCManager.sendPacket(0x41, event.data);
-          }
-        } else {
-          if (this.options.debug)
-            console.log("[Glock] No video data available in this event");
-        }
-      };
-
-      this.mediaRecorder.onstart = () => {
-        if (this.options.debug) console.log("[Glock] MediaRecorder started");
-      };
-
-      this.mediaRecorder.onstop = () => {
-        if (this.options.debug) console.log("[Glock] MediaRecorder stopped");
-      };
-
-      this.mediaRecorder.onerror = (event) => {
+      this.mediaRecorder.ondataavailable = this.handleDataAvailable.bind(this);
+      this.mediaRecorder.onstart = () =>
+        this.options.debug && console.log("[Glock] MediaRecorder started");
+      this.mediaRecorder.onstop = () =>
+        this.options.debug && console.log("[Glock] MediaRecorder stopped");
+      this.mediaRecorder.onerror = (event) =>
         console.error("[Glock] MediaRecorder error:", event);
-      };
 
       if (this.options.debug) console.log("[Glock] Starting MediaRecorder...");
-      this.mediaRecorder.start(100); // Capture every second
+      this.mediaRecorder.start(200); // Capture every 200ms for smoother video
     } catch (error) {
       console.error("[Glock] Error setting up video streaming:", error);
       this.updateStatus("avSetupFailed");
     }
+  }
+
+  private handleDataAvailable(event: BlobEvent) {
+    if (event.data && event.data.size > 0) {
+      if (this.options.debug) {
+        console.log(
+          "[Glock] Video data available, size:",
+          event.data.size,
+          "bytes"
+        );
+      }
+      this.addToBuffer(event.data);
+    } else if (this.options.debug) {
+      console.log("[Glock] No video data available in this event");
+    }
+  }
+
+  private addToBuffer(chunk: Blob) {
+    this.videoBuffer.push(chunk);
+    if (this.videoBuffer.length >= this.bufferSize) {
+      this.processBuffer();
+    } else if (!this.isProcessingBuffer) {
+      // Schedule processing even if buffer isn't full
+      this.scheduleBufferProcessing();
+    }
+  }
+
+  private async processBuffer() {
+    if (this.isProcessingBuffer) return;
+    this.isProcessingBuffer = true;
+
+    const chunksToProcess = this.videoBuffer.splice(0, this.bufferSize);
+    if (chunksToProcess.length === 0) return;
+
+    const blob = new Blob(chunksToProcess, { type: chunksToProcess[0].type });
+
+    if (this.webRTCManager && this.webRTCManager.isConnected()) {
+      try {
+        // 0x41 = AV chunk
+        await this.webRTCManager.sendPacket(0x41, blob);
+      } catch (error) {
+        console.error("[Glock] Error sending buffered chunk:", error);
+        this.videoBuffer.unshift(...chunksToProcess); // Put the chunks back at the start of the buffer
+      }
+    }
+
+    this.isProcessingBuffer = false;
+
+    // If there are still chunks in the buffer, process them
+    if (this.videoBuffer.length >= this.bufferSize) {
+      this.scheduleBufferProcessing();
+    }
+
+    this.adjustBufferSize();
+    this.lastProcessingTime = performance.now();
   }
 
   private stopVideoStreaming() {
@@ -231,5 +260,22 @@ export default class Client {
         console.error("[Glock] Error creating offer:", error);
         this.updateStatus("offerCreationFailed");
       });
+  }
+
+  private scheduleBufferProcessing() {
+    if ("requestIdleCallback" in window) {
+      window.requestIdleCallback(() => this.processBuffer(), { timeout: 1000 });
+    } else {
+      setTimeout(() => this.processBuffer(), 100);
+    }
+  }
+
+  private adjustBufferSize() {
+    const processingTime = performance.now() - this.lastProcessingTime;
+    if (processingTime > 50) {
+      this.bufferSize = Math.max(2, this.bufferSize - 1);
+    } else if (processingTime < 25 && this.bufferSize < 10) {
+      this.bufferSize++;
+    }
   }
 }
