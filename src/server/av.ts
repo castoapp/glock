@@ -5,6 +5,17 @@ import pathToFfmpeg from "ffmpeg-static";
 
 const debug = process.env.DEBUG === "true";
 
+const defaultStreamConfig = {
+  destination: "pipe:1",
+  vcodec: "h264_nvenc",
+  preset: "p4",
+  vbitrate: "6000k",
+  abitrate: "192k",
+  acodec: "aac",
+  fps: "30",
+  scale: null, //"1920:-2", // Scale to 1080p while maintaining aspect ratio
+};
+
 export default class AV extends EventEmitter {
   private process: ChildProcess | null = null;
   public isReady: boolean = false;
@@ -13,25 +24,7 @@ export default class AV extends EventEmitter {
     super();
   }
 
-  public async start(
-    config: {
-      destination: string;
-      vcodec?: string;
-      preset?: string;
-      vbitrate?: string;
-      abitrate?: string;
-      acodec?: string;
-      fps?: string;
-    } = {
-      destination: "pipe:1",
-      vcodec: "libx264",
-      preset: "ultrafast",
-      vbitrate: "5000k",
-      abitrate: "128k",
-      acodec: "libmp3lame",
-      fps: "60",
-    }
-  ) {
+  public async start(config = defaultStreamConfig) {
     if (this.process) {
       throw new Error("FFmpeg process is already running");
     }
@@ -40,47 +33,71 @@ export default class AV extends EventEmitter {
       throw new Error("FFmpeg binary not found");
     }
 
-    this.process = spawn(pathToFfmpeg, [
-      // "-hide_banner",
-      // "-loglevel",
-      // "error",
+    // Merge default config with provided config
+    config = { ...defaultStreamConfig, ...config };
+
+    console.info("[Glock] Config", config);
+
+    const args = [
       "-i",
       "pipe:0",
       "-f",
       "mpegts",
       "-c:v",
-      config.vcodec ?? "libx264",
-      "-pix_fmt",
-      "yuv420p",
-      // "-preset",
-      // config.preset ?? "ultrafast",
-      "-c:a",
-      config.acodec ?? "libmp3lame",
-      "-b:a",
-      config.abitrate ?? "128k",
+      config.vcodec,
+      "-preset",
+      config.vcodec === "h264_nvenc" ? "p4" : "medium",
+      "-rc",
+      "vbr",
+      "-cq",
+      "23",
+      "-qmin",
+      "0",
+      "-qmax",
+      "51",
       "-b:v",
-      config.vbitrate ?? "5000k",
-      "-threads",
-      "6",
-      "-qscale",
-      "3",
-      "-r",
-      config.fps ?? "60",
-      "-g",
-      config.fps ? String(Math.floor(Number(config.fps) * 2)) : "120",
+      "8000k",
+      "-maxrate",
+      "10000k",
       "-bufsize",
-      "512k",
-      // "-f",
-      // "flv",
-      config.destination ?? "pipe:1",
-    ]);
+      "20M",
+      "-c:a",
+      config.acodec,
+      "-b:a",
+      config.abitrate,
+      "-ar",
+      "48000",
+      "-threads",
+      "0",
+      "-filter_complex",
+      "[0:v]fps=fps=30[v];[0:a]aresample=async=1[a]",
+      "-map",
+      "[v]",
+      "-map",
+      "[a]",
+      "-vsync",
+      "1",
+      "-max_muxing_queue_size",
+      "1024", // Increase muxing queue size
+    ];
+
+    // Add scaling if needed
+    if (config.scale) {
+      args.push("-vf", `scale=${config.scale}`);
+    }
+
+    args.push(config.destination ?? "pipe:1");
+
+    console.info("[Glock] FFmpeg args", args);
+
+    this.process = spawn(pathToFfmpeg, args);
 
     this.process.stdout?.on("data", (data) => {
       console.log(`stdout: ${data}`);
     });
 
     this.process.stderr?.on("data", (data) => {
-      console.debug(data);
+      console.debug(data.toString());
 
       // Temporary solution to detect when FFmpeg is ready
       if (data.toString().includes("version") && !this.isReady) {

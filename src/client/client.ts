@@ -4,13 +4,8 @@ import "./types.js";
 import { jsonToBlob } from "./utils.js";
 
 const streamConfig = {
-  destination: "test123.mp4",
-  vbitrate: "20000k",
-  abitrate: "128k",
-  acodec: "aac",
-  vcodec: "h264_nvenc",
-  preset: "veryfast",
-  fps: 30,
+  destination: "test-" + Date.now() + ".mp4",
+  fps: null,
 };
 
 interface ClientConfig {
