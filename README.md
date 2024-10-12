@@ -15,6 +15,8 @@
   </p>
 </p>
 
+> **Note:** Glock is currently in active development. Some features may be incomplete or subject to change. Use with caution in production environments.
+
 ## Features
 
 - Client library (compatible with browsers and Electron)
