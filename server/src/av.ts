@@ -8,7 +8,7 @@ const debug = process.env.DEBUG === "true";
 const defaultStreamConfig = {
   destinationType: null,
   destination: "pipe:1",
-  vcodec: "h264_nvenc",
+  vcodec: "libx264", //"h264_nvenc",
   preset: "p4",
   vbitrate: "6000k",
   abitrate: "192k",
@@ -48,8 +48,6 @@ export default class AV extends EventEmitter {
       config.vcodec,
       "-preset",
       config.vcodec === "h264_nvenc" ? "p4" : "medium",
-      "-rc",
-      "vbr",
       "-cq",
       "23",
       "-qmin",
@@ -85,6 +83,10 @@ export default class AV extends EventEmitter {
     // Add scaling if needed
     if (config.scale) {
       args.push("-vf", `scale=${config.scale}`);
+    }
+
+    if (config.vcodec === "h264_nvenc") {
+      args.push("-rc", "vbr");
     }
 
     if (config.destinationType) args.push("-f", config.destinationType);
