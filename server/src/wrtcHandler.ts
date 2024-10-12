@@ -1,5 +1,5 @@
 import { PeerConnection, DataChannel } from "node-datachannel";
-import type Server from "./server";
+import type Server from "./server.js";
 import { WebSocket } from "ws";
 
 export class WRTCHandler {

@@ -1,6 +1,6 @@
 import { WebSocketServer } from "ws";
-import { Server, AV } from "./";
-import { arrayBufferToJSON } from "./utils";
+import { Server, AV } from "./index.js";
+import { arrayBufferToJSON } from "./utils.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -23,7 +23,7 @@ server.on("connect", () => {
   if (debug) console.debug("[Glock] Client connected");
 });
 
-server.on("packet", async (header, data) => {
+server.on("packet", async (header: number, data: Buffer) => {
   if (debug) console.debug("[Glock] Received chunk with header:", header);
 
   if (header === 0x10) {

@@ -4,8 +4,8 @@ import "./types.js";
 import { jsonToBlob } from "./utils.js";
 
 const streamConfig = {
+  destinationType: "flv",
   destination: "test-" + Date.now() + ".mp4",
-  fps: null,
 };
 
 interface ClientConfig {

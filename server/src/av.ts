@@ -1,11 +1,12 @@
 import EventEmitter from "events";
-import Server from "./server";
+import Server from "./server.js";
 import { ChildProcess, spawn } from "child_process";
-import pathToFfmpeg from "ffmpeg-static";
+import pathToFfmpeg from "ffmpeg-static/index.js";
 
 const debug = process.env.DEBUG === "true";
 
 const defaultStreamConfig = {
+  destinationType: null,
   destination: "pipe:1",
   vcodec: "h264_nvenc",
   preset: "p4",
@@ -86,6 +87,7 @@ export default class AV extends EventEmitter {
       args.push("-vf", `scale=${config.scale}`);
     }
 
+    if (config.destinationType) args.push("-f", config.destinationType);
     args.push(config.destination ?? "pipe:1");
 
     console.info("[Glock] FFmpeg args", args);

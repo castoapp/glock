@@ -1,5 +1,5 @@
 import WebSocket, { WebSocketServer } from "ws";
-import { WRTCHandler } from "./wrtcHandler";
+import { WRTCHandler } from "./wrtcHandler.js";
 import events from "events";
 import { randomUUID } from "crypto";
 
