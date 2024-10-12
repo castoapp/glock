@@ -76,8 +76,8 @@ export default class AV extends EventEmitter {
       "[v]",
       "-map",
       "[a]",
-      "-vsync",
-      "1",
+      "-fps_mode",
+      "vfr",
       "-max_muxing_queue_size",
       "1024"
     );
