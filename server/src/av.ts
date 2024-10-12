@@ -41,36 +41,24 @@ export default class AV extends EventEmitter {
 
     const args = ["-i", "pipe:0", "-f", "mpegts", "-c:v", config.vcodec];
 
-    // Add encoder-specific arguments
-    if (config.vcodec === "h264_nvenc") {
+    if (config.vcodec === "libx264") {
       args.push(
         "-preset",
-        "p4",
-        "-rc",
-        "vbr",
-        "-cq",
-        "23",
-        "-qmin",
-        "0",
-        "-qmax",
-        "51",
-        "-b:v",
-        "8000k",
-        "-maxrate",
-        "10000k",
-        "-bufsize",
-        "20M"
-      );
-    } else if (config.vcodec === "libx264") {
-      args.push(
-        "-preset",
-        "medium",
+        "veryfast",
+        "-tune",
+        "zerolatency",
         "-crf",
         "23",
         "-maxrate",
-        "8000k",
+        "6000k",
         "-bufsize",
-        "16M"
+        "12000k",
+        "-g",
+        "60",
+        "-sc_threshold",
+        "0",
+        "-threads",
+        "0"
       );
     }
 
@@ -82,10 +70,8 @@ export default class AV extends EventEmitter {
       config.abitrate,
       "-ar",
       "48000",
-      "-threads",
-      "0",
       "-filter_complex",
-      "[0:v]fps=fps=30[v];[0:a]aresample=async=1[a]",
+      "[0:v]fps=fps=30,format=yuv420p[v];[0:a]aresample=async=1[a]",
       "-map",
       "[v]",
       "-map",
