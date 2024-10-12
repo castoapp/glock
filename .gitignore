@@ -133,3 +133,6 @@ yarn.lock
 *.mp4
 dist
 bak
+
+client/README.md
+client/LICENSE

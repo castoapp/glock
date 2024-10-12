@@ -44,13 +44,13 @@ The server application, written in TypeScript for Node.js, receives the browser 
 To use the client library in your project, install it via npm:
 
 ```bash
-npm install glock-client
+npm install glockio
 ```
 
 Then you can import it in your project:
 
 ```typescript
-import Client from "glock-client";
+import Client from "glockio";
 
 // Capture AV stream from a video element
 const stream = video.captureStream(30);
@@ -63,7 +63,11 @@ client = new Client("ws://127.0.0.1:8080", stream, {
 
 // ...
 
-client.connect();
+client.connect({
+  destinationType: "flv",
+  destination: "rtmp://a.rtmp.youtube.com/live2/<key>",
+  // ...
+});
 ```
 
 ### Server

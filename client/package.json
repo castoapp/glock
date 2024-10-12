@@ -1,17 +1,22 @@
 {
-  "name": "glock-client",
-  "version": "0.0.1",
-  "description": "Glock is a Browser/Node.js library that allows you to transport AV stream over UDP to a server via WebRTC.",
+  "name": "glockio",
+  "version": "0.0.3",
+  "description": "Glock is a comprehensive solution consisting of a client library and a server application designed to transmit AV stream from a browser to any output destination using FFmpeg.",
   "repository": {
     "type": "git",
     "url": "https://github.com/castoapp/glock"
   },
+  "license": "GPL-2.0-only",
   "author": "casto",
   "type": "module",
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "npx tsc -p tsconfig.json",
     "serve": "http-server .",
-    "publish": "npm run build && npm publish"
+    "publish": "cp ../LICENSE . && cp ../README.md . && npm run build && npm publish && rm LICENSE && rm README.md"
   },
   "dependencies": {},
   "devDependencies": {

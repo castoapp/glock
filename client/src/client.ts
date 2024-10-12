@@ -3,10 +3,28 @@ import { WSManager } from "./wsManager.js";
 import "./types.js";
 import { jsonToBlob } from "./utils.js";
 
-const streamConfig = {
-  destinationType: "flv",
-  destination: "test-" + Date.now() + ".mp4",
-};
+interface StreamConfig {
+  // Destination type: flv, mp4, etc.
+  destinationType?: string;
+  // Destination URL/path
+  destination: string;
+  // MediaRecorder bitrate (default: 1500000)
+  recorderBitrate?: number;
+  // Force a specific MIME type for the MediaRecorder
+  forceMimeType?: string;
+  // Video codec (default: libx264)
+  vcodec?: string;
+  // Audio codec (default: aac)
+  acodec?: string;
+  // Video bitrate (default: 6000k)
+  vbitrate?: number;
+  // Audio bitrate (default: 192k)
+  abitrate?: number;
+  // FPS (default: 30)
+  fps?: number;
+  // Resolution (default: 1920x1080)
+  resolution?: string;
+}
 
 interface ClientConfig {
   debug: boolean;
@@ -23,6 +41,7 @@ export default class Client {
   private bufferSize = 5; // Number of chunks to buffer before sending
   private isProcessingBuffer = false;
   private lastProcessingTime = performance.now();
+  private streamConfig: StreamConfig | null = null;
 
   onOpen: (() => void) | null = null;
   onClose: (() => void) | null = null;
@@ -39,16 +58,26 @@ export default class Client {
     this.wsManager = new WSManager(this.serverUrl, this.webRTCManager);
   }
 
-  public async connect() {
+  public async connect(streamConfig: StreamConfig) {
+    // Set the stream config
+    this.streamConfig = streamConfig;
+    // Setup the WS manager
     this.setupWSManager();
+    // Connect to the server
     this.wsManager.connect();
   }
 
   public async disconnect() {
-    await this.processBuffer(); // Ensure all chunks are sent
-    this.stopVideoStreaming();
+    // Ensure all chunks are sent
+    await this.processBuffer();
+    // Stop MediaRecorder
+    this.stopRecorder();
+    // Close the WebRTC connection
     this.webRTCManager.close();
+    // Disconnect from the server
     this.wsManager.disconnect();
+    // Reset the stream config
+    this.streamConfig = null;
   }
 
   private setupWSManager() {
@@ -104,9 +133,9 @@ export default class Client {
         "video/mp4;codecs=h264,aac",
       ];
 
-      const selectedMimeType = mimeTypes.find((type) =>
-        MediaRecorder.isTypeSupported(type)
-      );
+      const selectedMimeType =
+        this.streamConfig?.forceMimeType ||
+        mimeTypes.find((type) => MediaRecorder.isTypeSupported(type));
 
       if (!selectedMimeType) {
         throw new Error(
@@ -119,7 +148,7 @@ export default class Client {
 
       this.mediaRecorder = new MediaRecorder(this.stream, {
         mimeType: selectedMimeType,
-        videoBitsPerSecond: 1500000, // 1.5Mbps for a balance of quality and performance
+        videoBitsPerSecond: this.streamConfig?.recorderBitrate || 1500000,
       });
 
       if (this.options.debug)
@@ -196,7 +225,7 @@ export default class Client {
     this.lastProcessingTime = performance.now();
   }
 
-  private stopVideoStreaming() {
+  private stopRecorder() {
     if (this.mediaRecorder) {
       this.mediaRecorder.stop();
       // Send a message to the server indicating the end of the video stream
@@ -231,8 +260,12 @@ export default class Client {
       this.updateStatus("connected");
 
       // 0x10 = AV stream start
-      if (this.webRTCManager && this.webRTCManager.isConnected()) {
-        this.webRTCManager.sendPacket(0x10, jsonToBlob(streamConfig));
+      if (
+        this.webRTCManager &&
+        this.webRTCManager.isConnected() &&
+        this.streamConfig
+      ) {
+        this.webRTCManager.sendPacket(0x10, jsonToBlob(this.streamConfig));
       }
     };
 
