@@ -2,6 +2,7 @@ import { WebSocketServer } from "ws";
 import { Server, AV } from "./index.js";
 import { arrayBufferToJSON } from "./utils.js";
 import dotenv from "dotenv";
+import { publicIpv4 } from "public-ip";
 
 dotenv.config();
 
@@ -51,4 +52,18 @@ server.on("disconnect", async (client) => {
   await av.stop();
 });
 
-console.log(`[Glock] WS server is running on ws://localhost:${port}`);
+console.log(`[Glock] WebSockets server is running on:`);
+console.log(`  - Local:   ws://localhost:${port}`);
+
+publicIpv4()
+  .then((ip) => {
+    console.log(`  - Network: ws://${ip}:${port}`);
+  })
+  .catch(() => {
+    console.log(`  - Network: <unknown>`);
+  })
+  .finally(() => {
+    console.log(
+      `  - Use your machine's IP address or domain name for remote connections`
+    );
+  });
