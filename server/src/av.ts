@@ -39,27 +39,43 @@ export default class AV extends EventEmitter {
 
     console.info("[Glock] Config", config);
 
-    const args = [
-      "-i",
-      "pipe:0",
-      "-f",
-      "mpegts",
-      "-c:v",
-      config.vcodec,
-      "-preset",
-      config.vcodec === "h264_nvenc" ? "p4" : "medium",
-      "-cq",
-      "23",
-      "-qmin",
-      "0",
-      "-qmax",
-      "51",
-      "-b:v",
-      "8000k",
-      "-maxrate",
-      "10000k",
-      "-bufsize",
-      "20M",
+    const args = ["-i", "pipe:0", "-f", "mpegts", "-c:v", config.vcodec];
+
+    // Add encoder-specific arguments
+    if (config.vcodec === "h264_nvenc") {
+      args.push(
+        "-preset",
+        "p4",
+        "-rc",
+        "vbr",
+        "-cq",
+        "23",
+        "-qmin",
+        "0",
+        "-qmax",
+        "51",
+        "-b:v",
+        "8000k",
+        "-maxrate",
+        "10000k",
+        "-bufsize",
+        "20M"
+      );
+    } else if (config.vcodec === "libx264") {
+      args.push(
+        "-preset",
+        "medium",
+        "-crf",
+        "23",
+        "-maxrate",
+        "8000k",
+        "-bufsize",
+        "16M"
+      );
+    }
+
+    // Common arguments for both encoders
+    args.push(
       "-c:a",
       config.acodec,
       "-b:a",
@@ -77,16 +93,12 @@ export default class AV extends EventEmitter {
       "-vsync",
       "1",
       "-max_muxing_queue_size",
-      "1024", // Increase muxing queue size
-    ];
+      "1024"
+    );
 
     // Add scaling if needed
     if (config.scale) {
       args.push("-vf", `scale=${config.scale}`);
-    }
-
-    if (config.vcodec === "h264_nvenc") {
-      args.push("-rc", "vbr");
     }
 
     if (config.destinationType) args.push("-f", config.destinationType);
