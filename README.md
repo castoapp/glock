@@ -1,6 +1,19 @@
-# Glock
-
-Glock is a comprehensive solution consisting of a client library and a server application designed to transmit AV stream from a browser to any output destination using FFmpeg (for example, YouTube via RTMP).
+<p align="center">
+  <p align="center">
+   <img width="140" height="140" src="casto.png" alt="Icon">
+  </p>
+  <h1 align="center">
+    <b>Glock</b>
+  </h1>
+  <p align="center">
+    Glock is a comprehensive solution consisting of a client library and a server application designed to transmit AV stream from a browser to any output destination using FFmpeg (for example, YouTube via RTMP).
+    <br />
+    <a href="https://casto.app">
+      <b>casto.app</b>
+    </a>
+    <br />
+  </p>
+</p>
 
 ## Features
 
