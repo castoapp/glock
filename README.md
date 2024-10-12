@@ -7,9 +7,9 @@ Glock is a comprehensive solution consisting of a client library and a server ap
 - Client library (compatible with browsers and Electron)
 - Node.js server application deployable with Docker Compose
 - Stream transmission using WebRTC (UDP) for low latency
-- Fallback option using WebSocket (TCP)
+- Fallback option using WebSocket (TCP) **TODO**
 - Direct transmission of AV stream to any FFmpeg-supported output
-- Configurable video encoding parameters
+- Configurable video encoding parameters **TODO**
 - Automatic buffer size adjustment for optimal performance
 
 ## Components
