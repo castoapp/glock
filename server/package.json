@@ -13,6 +13,9 @@
     "start:dev": "tsx src/start.ts",
     "build": "npx tsc -p tsconfig.json"
   },
+  "bin": {
+    "glock": "./dist/start.js"
+  },
   "dependencies": {
     "dotenv": "^16.4.5",
     "ffmpeg-static": "^5.2.0",

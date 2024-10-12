@@ -1,0 +1,20 @@
+version: "3.8"
+
+services:
+  glock:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./src:/app/src
+      - ./package.json:/app/package.json
+      - ./tsconfig.json:/app/tsconfig.json
+      - ./.env:/app/.env
+    environment:
+      - NODE_ENV=production
+      - AUTH_KEY=${AUTH_KEY}
+    command: npm run start
+    network_mode: "host"
+
+volumes:
+  node_modules:
