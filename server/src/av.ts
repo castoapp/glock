@@ -1,5 +1,4 @@
 import EventEmitter from "events";
-import Server from "./server.js";
 import { ChildProcess, spawn } from "child_process";
 import pathToFfmpeg from "ffmpeg-static/index.js";
 import { Client } from "./wsHandler.js";
@@ -24,6 +23,7 @@ const defaultStreamConfig = {
 
 interface Options {
   chunkWaitTimeout?: number;
+  chunkWaitCheckInterval?: number;
 }
 
 export default class AV extends EventEmitter {
@@ -37,6 +37,8 @@ export default class AV extends EventEmitter {
 
     this.options.chunkWaitTimeout =
       options.chunkWaitTimeout || DEFAULT_CHUNK_WAIT_TIMEOUT;
+    this.options.chunkWaitCheckInterval =
+      options.chunkWaitCheckInterval || DEFAULT_CHUNK_WAIT_CHECK_INTERVAL;
   }
 
   public async start(config = defaultStreamConfig) {
@@ -113,7 +115,7 @@ export default class AV extends EventEmitter {
     this.lastChunkTime = Date.now();
     this.chunkWaitCheckInterval = setInterval(
       this.onChunkWaitCheckInterval.bind(this),
-      DEFAULT_CHUNK_WAIT_CHECK_INTERVAL
+      this.options.chunkWaitCheckInterval!
     );
 
     this.process.stdout?.on("data", (data) => {

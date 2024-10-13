@@ -21,9 +21,11 @@ export class WRTCHandler {
   private rtc?: PeerConnection;
   private dataChannel?: DataChannel;
   private maxPacketSize!: number;
+  private iceServers!: string[];
 
   constructor(private server: Server, private ws: WebSocket) {
     this.maxPacketSize = server.options.maxPacketSize!;
+    this.iceServers = server.options.iceServers!;
   }
 
   /**
@@ -34,7 +36,7 @@ export class WRTCHandler {
   handleWebRTCOffer(offer: RTCSessionDescriptionInit, client: Client) {
     // Create a new peer connection
     this.rtc = new PeerConnection("Server", {
-      iceServers: DEFAULT_ICE_SERVERS,
+      iceServers: this.iceServers,
     });
 
     // Handle local description
