@@ -59,14 +59,17 @@ const stream = video.captureStream(30);
 client = new Client("ws://127.0.0.1:8080", stream, {
   debug: false,
   authKey: "your-secret-auth-key",
+  /// ... see other options
 });
 
-// ...
-
-client.connect({
-  destinationType: "flv",
-  destination: "rtmp://a.rtmp.youtube.com/live2/<key>",
-  // ...
+// Connect to the server
+client.connect().then(() => {
+  // Start streaming to the destination
+  client.start({
+    destinationType: "flv",
+    destination: "rtmp://a.rtmp.youtube.com/live2/<key>",
+    // ... see other options
+  });
 });
 ```
 

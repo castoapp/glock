@@ -1,6 +1,6 @@
 {
   "name": "glockio",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "Glock is a comprehensive solution consisting of a client library and a server application designed to transmit AV stream from a browser to any output destination using FFmpeg.",
   "repository": {
     "type": "git",
