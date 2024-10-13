@@ -4,6 +4,7 @@ import "./types.js";
 import {
   DEFAULT_BUFFER_SIZE,
   DEFAULT_CHUNK_LENGTH_TIME,
+  DEFAULT_CHUNK_SIZE,
   jsonToBlob,
   Status,
 } from "./utils.js";
@@ -36,6 +37,7 @@ interface ClientConfig {
   authKey?: string;
   bufferSize?: number;
   chunkLengthTime?: number;
+  chunkSize?: number;
 }
 
 export default class Client extends EventTarget {
@@ -80,10 +82,20 @@ export default class Client extends EventTarget {
     // Debug mode (default: false)
     this.options.debug = options.debug || false;
     // Chunk length time (default: 200ms)
+    // WARNING: Value less than 50ms is not recommended as it may cause
+    // performance issues or packet loss
     this.options.chunkLengthTime =
       options.chunkLengthTime || DEFAULT_CHUNK_LENGTH_TIME;
+    // Chunk size (default: 101 KB)
+    // WARNING: Value can not exceed 101 KB as it's too big for WebRTC datachannel
+    if (options.chunkSize && options.chunkSize > DEFAULT_CHUNK_SIZE) {
+      throw new Error(
+        "[Glock] Chunk size can not exceed " + DEFAULT_CHUNK_SIZE / 1024 + " KB"
+      );
+    }
+    this.options.chunkSize = options.chunkSize || DEFAULT_CHUNK_SIZE;
     // Initialize WebRTCManager
-    this.webRTCManager = new WebRTCManager(this);
+    this.webRTCManager = new WebRTCManager(this, this.options.chunkSize);
     // Initialize WSManager
     this.createWSManager();
   }
