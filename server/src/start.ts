@@ -1,16 +1,27 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import { WebSocketServer } from "ws";
 import { Server, AV } from "./index.js";
-import { arrayBufferToJSON } from "./utils.js";
-import dotenv from "dotenv";
-import { publicIpv4 } from "public-ip";
+import {
+  arrayBufferToJSON,
+  DEFAULT_CHUNK_WAIT_TIMEOUT,
+  DEFAULT_MAX_PACKET_SIZE,
+} from "./utils.js";
 
-dotenv.config();
+import { publicIpv4 } from "public-ip";
+import { Client } from "./wsHandler.js";
 
 const port = parseInt(process.env.PORT || "8080");
 const wss = new WebSocketServer({ port });
 
 const authKey = process.env.AUTH_KEY || "";
-const maxPacketSize = Number(process.env.MAX_PACKET_SIZE || `${101 * 1024}`); // 100 KB + 1 KB reserved for header
+const maxPacketSize = Number(
+  process.env.MAX_PACKET_SIZE || DEFAULT_MAX_PACKET_SIZE
+);
+const chunkWaitTimeout = Number(
+  process.env.CHUNK_WAIT_TIMEOUT || DEFAULT_CHUNK_WAIT_TIMEOUT
+);
 const debug = process.env.DEBUG === "true";
 
 const server = new Server(wss, {
@@ -18,38 +29,58 @@ const server = new Server(wss, {
   authKey,
 });
 
-const av = new AV(server);
+const avInstances = new Map<Client, AV>();
 
-server.on("connect", () => {
-  if (debug) console.debug("[Glock] Client connected");
-});
-
-server.on("packet", async (header: number, data: Buffer) => {
+server.on("packet", async (header: number, data: Buffer, client: Client) => {
   if (debug) console.debug("[Glock] Received chunk with header:", header);
 
   if (header === 0x10) {
+    // Parse the config payload
     const payload = arrayBufferToJSON(data);
     if (debug) console.info("[Glock] Received AV stream start", payload);
+
+    // Initialize the AV instance
+    const av = new AV(client, { chunkWaitTimeout });
+    avInstances.set(client, av);
+
+    av.once("timeout", () => {
+      // Delete the AV instance if the chunk wait times out
+      avInstances.delete(client);
+
+      // 0x35 = AV chunk wait timeout
+      client.wrtcHandler.sendHeader(0x36);
+    });
+
+    // Start the AV stream
     await av.start(payload);
 
+    // Send the AV stream ready header
     av.once("ready", () => {
       if (debug) console.debug("[Glock] AV stream ready");
 
       // 0x34 = AV stream ready
-      server.wrtcHandler.sendHeader(0x34);
+      client.wrtcHandler.sendHeader(0x34);
     });
   } else if (header === 0x41) {
-    if (debug) console.debug("[Glock] Received AV chunk");
-    await av.put(data);
+    if (debug) console.info("[Glock] Received AV chunk");
+
+    const av = avInstances.get(client);
+    await av?.put(data);
   } else if (header === 0x84) {
-    if (debug) console.debug("[Glock] Received AV stream end");
-    await av.stop();
+    if (debug) console.info("[Glock] Received AV stream end");
+
+    const av = avInstances.get(client);
+    await av?.stop();
+    avInstances.delete(client);
   }
 });
 
 server.on("disconnect", async (client) => {
-  if (debug) console.debug("[Glock] Client disconnected");
-  await av.stop();
+  if (debug) console.info("[Glock] Client disconnected");
+
+  const av = avInstances.get(client);
+  await av?.stop();
+  avInstances.delete(client);
 });
 
 console.log(`[Glock] WebSockets server is running on:`);

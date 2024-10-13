@@ -1,4 +1,5 @@
 import Client from "./client.js";
+import { DEFAULT_CHUNK_SIZE, DEFAULT_ICE_SERVERS } from "./utils.js";
 
 export default class WebRTCManager {
   private peerConnection: RTCPeerConnection | null = null;
@@ -13,10 +14,8 @@ export default class WebRTCManager {
 
   constructor(
     public client: Client,
-    public chunkSize: number = 100 * 1024,
-    private iceServers: RTCIceServer[] = [
-      { urls: "stun:stun.l.google.com:19302" },
-    ]
+    public chunkSize: number = DEFAULT_CHUNK_SIZE,
+    private iceServers: RTCIceServer[] = DEFAULT_ICE_SERVERS
   ) {
     this.initializePeerConnection();
   }
@@ -151,6 +150,15 @@ export default class WebRTCManager {
     }
 
     return chunks;
+  }
+
+  public async sendHeader(header: number) {
+    const headerArray = new Uint8Array([header]);
+    // Send the packet
+    this.sendData(headerArray.buffer);
+
+    if (this.client.options.debug)
+      console.info(`[Glock] header_sent: ${header}`);
   }
 
   public async sendPacket(header: number, data: Blob) {

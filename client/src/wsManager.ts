@@ -6,19 +6,45 @@ export class WSManager {
   onOpen: (() => void) | null = null;
   onClose: (() => void) | null = null;
   onError: ((error: Event) => void) | null = null;
-  onAuthSuccess: (() => void) | null = null;
-  onAuthFailed: (() => void) | null = null;
   onStatusChange: ((status: string) => void) | null = null;
   onOtherMessage: ((message: any) => void) | null = null;
 
   constructor(
     private serverUrl: string,
-    private webRTCManager: WebRTCManager
+    private webRTCManager: WebRTCManager,
+    private authKey: string
   ) {}
 
-  public connect() {
-    this.ws = new WebSocket(this.serverUrl);
-    this.setupWebSocket();
+  public async connect() {
+    // Append authKey as a query parameter
+    const url = new URL(this.serverUrl);
+    url.searchParams.append("authKey", this.authKey);
+
+    return new Promise((resolve, reject) => {
+      this.ws = new WebSocket(url.toString());
+
+      this.ws.onopen = () => {
+        console.log("WebSocket connection established");
+        if (this.onOpen) this.onOpen();
+        resolve(true);
+      };
+
+      this.ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        this.handleMessage(data);
+      };
+
+      this.ws.onclose = () => {
+        console.log("WebSocket connection closed");
+        if (this.onClose) this.onClose();
+      };
+
+      this.ws.onerror = (error) => {
+        console.error("WebSocket error:", error);
+        if (this.onError) this.onError(error);
+        reject(error);
+      };
+    });
   }
 
   public disconnect() {
@@ -35,38 +61,8 @@ export class WSManager {
     }
   }
 
-  private setupWebSocket() {
-    if (!this.ws) return;
-
-    this.ws.onopen = () => {
-      console.log("WebSocket connection established");
-      if (this.onOpen) this.onOpen();
-    };
-
-    this.ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      this.handleMessage(data);
-    };
-
-    this.ws.onclose = () => {
-      console.log("WebSocket connection closed");
-      if (this.onClose) this.onClose();
-    };
-
-    this.ws.onerror = (error) => {
-      console.error("WebSocket error:", error);
-      if (this.onError) this.onError(error);
-    };
-  }
-
   private handleMessage(data: any) {
     switch (data.type) {
-      case "auth:success":
-        if (this.onAuthSuccess) this.onAuthSuccess();
-        break;
-      case "auth:failed":
-        if (this.onAuthFailed) this.onAuthFailed();
-        break;
       case "wrtc:answer":
         this.handleWebRTCAnswer(data.answer);
         break;

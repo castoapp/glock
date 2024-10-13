@@ -1,9 +1,14 @@
 import WebRTCManager from "./wrtcManager.js";
 import { WSManager } from "./wsManager.js";
 import "./types.js";
-import { jsonToBlob } from "./utils.js";
+import {
+  DEFAULT_BUFFER_SIZE,
+  DEFAULT_CHUNK_LENGTH_TIME,
+  jsonToBlob,
+  Status,
+} from "./utils.js";
 
-interface StreamConfig {
+export interface StreamConfig {
   // Destination type: flv, mp4, etc.
   destinationType?: string;
   // Destination URL/path
@@ -27,49 +32,95 @@ interface StreamConfig {
 }
 
 interface ClientConfig {
-  debug: boolean;
-  authKey: string;
+  debug?: boolean;
+  authKey?: string;
+  bufferSize?: number;
+  chunkLengthTime?: number;
 }
 
-export default class Client {
-  private wsManager: WSManager;
+export default class Client extends EventTarget {
+  private wsManager!: WSManager;
   private webRTCManager: WebRTCManager;
   private authKey: string;
   private mediaRecorder: MediaRecorder | null = null;
-  public status: string = "disconnected";
+  public status: Status = Status.IDLE;
   private videoBuffer: Blob[] = [];
-  private bufferSize = 5; // Number of chunks to buffer before sending
+  private bufferSize: number;
   private isProcessingBuffer = false;
   private lastProcessingTime = performance.now();
   private streamConfig: StreamConfig | null = null;
 
-  onOpen: (() => void) | null = null;
-  onClose: (() => void) | null = null;
-  onMessage: ((message: Uint8Array) => void) | null = null;
-  onStatusChange: ((status: string) => void) | null = null;
-
+  /**
+   * @param serverUrl - The URL of the server to connect to
+   * @param stream - The MediaStream to capture
+   * @param options - The client configuration options
+   */
   constructor(
+    /**
+     * The URL of the server to connect to
+     */
     private serverUrl: string,
+    /**
+     * The MediaStream to capture
+     */
     public stream: MediaStream,
-    public options: ClientConfig = { debug: false, authKey: "" }
+    /**
+     * @param debug - Debug mode (default: false)
+     * @param authKey - Authentication key (default: empty string)
+     * @param bufferSize - Chunks buffer size (default: 5)
+     */
+    public options: ClientConfig = {}
   ) {
-    this.authKey = options.authKey;
+    super();
+
+    // Authentication key (default: empty string)
+    this.authKey = options.authKey || "";
+    // Chunks buffer size (default: 5)
+    this.bufferSize = options.bufferSize || DEFAULT_BUFFER_SIZE;
+    // Debug mode (default: false)
+    this.options.debug = options.debug || false;
+    // Chunk length time (default: 200ms)
+    this.options.chunkLengthTime =
+      options.chunkLengthTime || DEFAULT_CHUNK_LENGTH_TIME;
+    // Initialize WebRTCManager
     this.webRTCManager = new WebRTCManager(this);
-    this.wsManager = new WSManager(this.serverUrl, this.webRTCManager);
+    // Initialize WSManager
+    this.createWSManager();
   }
 
-  public async connect(streamConfig: StreamConfig) {
-    // Set the stream config
-    this.streamConfig = streamConfig;
-    // Setup the WS manager
-    this.setupWSManager();
+  private createWSManager() {
+    // Initialize WSManager
+    this.wsManager = new WSManager(
+      this.serverUrl,
+      this.webRTCManager,
+      this.authKey
+    );
+
+    // Listen connection open event
+    this.wsManager.onOpen = this.initializeWebRTC.bind(this);
+    // Listen connection close event
+    this.wsManager.onClose = () => {
+      this.mediaRecorder && this.mediaRecorder.stop();
+      this.status = Status.IDLE;
+    };
+    // Listen connection error event
+    this.wsManager.onError = (error) => {
+      console.error("[Glock] WS connection error:", error);
+      this.status = Status.SERVER_CONNECTION_FAILED;
+    };
+  }
+
+  public async connect() {
+    // Update the status
+    this.status = Status.SERVER_CONNECTING;
     // Connect to the server
-    this.wsManager.connect();
+    this.status = await this.wsManager
+      .connect()
+      .then(() => Status.SERVER_CONNECTED)
+      .catch(() => Status.SERVER_CONNECTION_FAILED);
   }
 
-  public async disconnect() {
-    // Ensure all chunks are sent
-    await this.processBuffer();
+  public disconnect() {
     // Stop MediaRecorder
     this.stopRecorder();
     // Close the WebRTC connection
@@ -80,39 +131,37 @@ export default class Client {
     this.streamConfig = null;
   }
 
-  private setupWSManager() {
-    this.wsManager.onOpen = () => {
-      this.updateStatus("authenticating");
-      this.authenticate();
-    };
+  public async start(streamConfig: StreamConfig) {
+    // Ensure the server is connected
+    if (this.status !== Status.DATA_CHANNEL_OPENED)
+      throw new Error("[Glock] Data channel is not opened");
+    // Ensure the stream config is provided
+    if (!streamConfig) throw new Error("[Glock] Stream config is required");
 
-    this.wsManager.onAuthSuccess = () => {
-      this.updateStatus("authenticated");
-      this.initializeWebRTC();
-    };
+    // Set the stream config
+    this.streamConfig = streamConfig;
+    // Send: 0x10 = AV stream start
+    if (
+      this.webRTCManager &&
+      this.webRTCManager.isConnected() &&
+      this.streamConfig
+    ) {
+      this.webRTCManager.sendPacket(0x10, jsonToBlob(this.streamConfig));
+    }
+  }
 
-    this.wsManager.onAuthFailed = () => {
-      this.updateStatus("authenticationFailed");
-    };
-
-    this.wsManager.onStatusChange = (status) => {
-      this.updateStatus(status);
-    };
-
-    this.wsManager.onOtherMessage = (message) => {
-      if (this.onMessage) this.onMessage(message);
-    };
-
-    this.wsManager.onClose = () => {
-      this.updateStatus("disconnected");
-      if (this.onClose) this.onClose();
-      if (this.mediaRecorder) this.mediaRecorder.stop();
-    };
-
-    this.wsManager.onError = (error) => {
-      console.error("[Glock] WS connection error:", error);
-      this.updateStatus("connectionFailed");
-    };
+  public async stop(drainBuffer = false) {
+    if (drainBuffer) {
+      this.isProcessingBuffer = false;
+      this.videoBuffer = [];
+    } else {
+      // Ensure all chunks are sent
+      await this.processBuffer();
+    }
+    // Stop buffer processing
+    this.isProcessingBuffer = false;
+    // Stop MediaRecorder
+    this.stopRecorder();
   }
 
   private async startRecorder() {
@@ -163,15 +212,19 @@ export default class Client {
         console.error("[Glock] MediaRecorder error:", event);
 
       if (this.options.debug) console.log("[Glock] Starting MediaRecorder...");
-      this.mediaRecorder.start(200); // Capture every 200ms for smoother video
+      this.mediaRecorder.start(this.options.chunkLengthTime); // Capture every 200ms for smoother video
     } catch (error) {
       console.error("[Glock] Error setting up video streaming:", error);
-      this.updateStatus("avSetupFailed");
+      this.status = Status.AV_SETUP_FAILED;
     }
   }
 
   private handleDataAvailable(event: BlobEvent) {
-    if (event.data && event.data.size > 0) {
+    if (
+      event.data &&
+      event.data.size > 0 &&
+      this.mediaRecorder?.state === "recording"
+    ) {
       if (this.options.debug) {
         console.log(
           "[Glock] Video data available, size:",
@@ -200,7 +253,11 @@ export default class Client {
     this.isProcessingBuffer = true;
 
     const chunksToProcess = this.videoBuffer.splice(0, this.bufferSize);
-    if (chunksToProcess.length === 0) return;
+
+    if (chunksToProcess.length === 0) {
+      this.isProcessingBuffer = false;
+      return;
+    }
 
     const blob = new Blob(chunksToProcess, { type: chunksToProcess[0].type });
 
@@ -215,7 +272,6 @@ export default class Client {
     }
 
     this.isProcessingBuffer = false;
-
     // If there are still chunks in the buffer, process them
     if (this.videoBuffer.length >= this.bufferSize) {
       this.scheduleBufferProcessing();
@@ -231,67 +287,59 @@ export default class Client {
       // Send a message to the server indicating the end of the video stream
       if (this.webRTCManager && this.webRTCManager.isConnected()) {
         // 0x84 = AV stream end
-        this.webRTCManager.sendPacket(0x84, new Blob());
+        this.webRTCManager.sendHeader(0x84);
       }
     }
   }
 
-  private updateStatus(status: string) {
-    this.status = status;
-    if (this.onStatusChange) this.onStatusChange(status);
-  }
-
-  private authenticate() {
-    this.wsManager.send(JSON.stringify({ type: "auth", key: this.authKey }));
-  }
-
-  private initializeWebRTC() {
+  private async initializeWebRTC() {
     this.webRTCManager.onIceCandidate = (candidate) => {
       this.wsManager.send(JSON.stringify({ type: "wrtc:ice", candidate }));
     };
 
-    this.webRTCManager.onConnectionStateChange = (state) => {
-      if (state === "connected" && this.onOpen) {
-        this.onOpen();
-      }
-    };
-
     this.webRTCManager.onDataChannelOpen = () => {
-      this.updateStatus("connected");
-
-      // 0x10 = AV stream start
-      if (
-        this.webRTCManager &&
-        this.webRTCManager.isConnected() &&
-        this.streamConfig
-      ) {
-        this.webRTCManager.sendPacket(0x10, jsonToBlob(this.streamConfig));
-      }
+      this.status = Status.DATA_CHANNEL_OPENED;
     };
 
     this.webRTCManager.onDataChannelMessage = (message) => {
       const header = new Uint8Array(message)[0];
-
       if (this.options.debug) console.info("[Glock] Received header:", header);
 
+      // 0x34 = AV stream ready
       if (header === 0x34) {
         if (this.options.debug) console.info("[Glock] AV stream ready");
         this.startRecorder();
       }
+
+      // 0x35 = AV stream start error
+      if (header == 0x35) {
+        console.error("[Glock] AV stream start error");
+        this.stop(true);
+
+        this.dispatchEvent(new Event("avStreamStartError"));
+      }
+
+      // 0x36 = AV chunk wait timeout
+      if (header == 0x36) {
+        console.error("[Glock] AV chunk wait timeout");
+        this.stop(true);
+
+        this.dispatchEvent(new Event("avStreamStartError"));
+      }
     };
 
     this.webRTCManager.onDataChannelClose = () => {
-      this.updateStatus("dataChannelClosed");
+      this.status = Status.DATA_CHANNEL_CLOSED;
     };
 
-    this.webRTCManager
+    return this.webRTCManager
       .createOffer()
       .then((offer) => {
         this.wsManager.send(JSON.stringify({ type: "wrtc:offer", offer }));
       })
       .catch((error) => {
         console.error("[Glock] Error creating offer:", error);
-        this.updateStatus("offerCreationFailed");
+        this.status = Status.OFFER_CREATION_FAILED;
       });
   }
 

@@ -2,6 +2,11 @@ import EventEmitter from "events";
 import Server from "./server.js";
 import { ChildProcess, spawn } from "child_process";
 import pathToFfmpeg from "ffmpeg-static/index.js";
+import { Client } from "./wsHandler.js";
+import {
+  DEFAULT_CHUNK_WAIT_CHECK_INTERVAL,
+  DEFAULT_CHUNK_WAIT_TIMEOUT,
+} from "./utils.js";
 
 const debug = process.env.DEBUG === "true";
 
@@ -17,12 +22,21 @@ const defaultStreamConfig = {
   scale: null, //"1920:-2", // Scale to 1080p while maintaining aspect ratio
 };
 
+interface Options {
+  chunkWaitTimeout?: number;
+}
+
 export default class AV extends EventEmitter {
   private process: ChildProcess | null = null;
   public isReady: boolean = false;
+  private lastChunkTime: number = 0;
+  private chunkWaitCheckInterval: NodeJS.Timeout | null = null;
 
-  constructor(private server: Server) {
+  constructor(private client: Client, public options: Options = {}) {
     super();
+
+    this.options.chunkWaitTimeout =
+      options.chunkWaitTimeout || DEFAULT_CHUNK_WAIT_TIMEOUT;
   }
 
   public async start(config = defaultStreamConfig) {
@@ -92,7 +106,15 @@ export default class AV extends EventEmitter {
 
     console.info("[Glock] FFmpeg args", args);
 
+    // Start the FFmpeg process
     this.process = spawn(pathToFfmpeg, args);
+
+    // Set the chunk wait check interval
+    this.lastChunkTime = Date.now();
+    this.chunkWaitCheckInterval = setInterval(
+      this.onChunkWaitCheckInterval.bind(this),
+      DEFAULT_CHUNK_WAIT_CHECK_INTERVAL
+    );
 
     this.process.stdout?.on("data", (data) => {
       console.log(`stdout: ${data}`);
@@ -112,21 +134,31 @@ export default class AV extends EventEmitter {
       console.error(`FFmpeg process error: ${error.message}`);
     });
 
-    this.process.on("exit", (code, signal) => {
+    this.process.on("close", (code, signal) => {
       if (debug)
-        console.debug(
-          `[Glock] FFmpeg process exited with code ${code} and signal ${signal}`
+        console.info(
+          `[Glock] FFmpeg process closed with code ${code} and signal ${signal}`
         );
+
       this.process = null;
     });
   }
 
   public async put(data: Buffer) {
+    // Reset the chunk wait timeout
+    this.lastChunkTime = Date.now();
+
+    // Check if the FFmpeg process is running and has a stdin stream
     if (!this.process || !this.process.stdin) {
-      throw new Error(
-        "FFmpeg process is not running or stdin is not available"
+      console.error(
+        "[Glock] FFmpeg process is not running or stdin is not available"
       );
+
+      // 0x35 = AV stream start error
+      this.client.wrtcHandler.sendHeader(0x35);
     }
+
+    // Write the data to the FFmpeg process stdin
     return new Promise<void>((resolve, reject) => {
       if (
         !this.process?.stdin?.write(data, (error) => {
@@ -139,13 +171,29 @@ export default class AV extends EventEmitter {
     });
   }
 
+  private onChunkWaitCheckInterval() {
+    const currentTime = Date.now();
+    if (currentTime - this.lastChunkTime > this.options.chunkWaitTimeout!) {
+      console.error("[Glock] [av] Chunk wait timed out");
+      this.stop();
+      this.emit("timeout");
+    }
+  }
+
   public async stop() {
+    // Clear the chunk wait check interval
+    clearInterval(this.chunkWaitCheckInterval!);
+
+    // Check if the FFmpeg process is running
     if (!this.process) {
       if (debug) console.warn("[Glock] No FFmpeg process to stop");
       return;
     }
+
+    // Wait for the FFmpeg process to exit
     return new Promise<void>((resolve) => {
-      this.process?.on("exit", () => {
+      this.process?.once("exit", () => {
+        console.info("[Glock] FFMpeg process exited");
         this.process = null;
         resolve();
       });

@@ -16,24 +16,23 @@
       style="width: 640px; height: 360px"
     ></video>
     <br />
-    <button id="connectBtn">Start</button>
-    <button id="disconnectBtn" disabled>Stop</button>
-    <div id="status"></div>
-    <div id="messages"></div>
+    <button id="connectBtn">Connect</button>
+    <button id="startBtn" disabled>Start</button>
+    <button id="stopBtn" disabled>Stop</button>
+    <button id="disconnectBtn" disabled>Disconnect</button>
 
     <script type="module">
       import Client from "../dist/client.js";
 
       const videoElement = document.getElementById("videoElement");
-      const statusDiv = document.getElementById("status");
-      const messagesDiv = document.getElementById("messages");
       const connectBtn = document.getElementById("connectBtn");
       const disconnectBtn = document.getElementById("disconnectBtn");
+      const startBtn = document.getElementById("startBtn");
+      const stopBtn = document.getElementById("stopBtn");
 
       let client;
 
       connectBtn.addEventListener("click", async () => {
-        statusDiv.textContent = "Connecting...";
         connectBtn.disabled = true;
 
         // Capture stream from video element
@@ -41,27 +40,40 @@
 
         // Replace with your actual WebSocket server URL and auth key
         client = new Client("ws://localhost:8080", stream, {
-          debug: false,
+          debug: true,
           authKey: "your-secret-auth-key",
         });
 
-        client.onStatusChange = (status) => {
-          statusDiv.textContent = status;
-          if (status === "connected") {
-            disconnectBtn.disabled = false;
-            videoElement.play();
-          } else {
-            disconnectBtn.disabled = true;
-          }
-        };
+        await client.connect().then(() => {
+          disconnectBtn.disabled = false;
+          startBtn.disabled = false;
+        });
 
-        client.onMessage = (message) => {
-          const messageElement = document.createElement("p");
-          messageElement.textContent = `Received: ${message}`;
-          messagesDiv.appendChild(messageElement);
-        };
+        client.addEventListener("avStreamStartError", () => {
+          startBtn.disabled = false;
+          stopBtn.disabled = true;
+          videoElement.pause();
+        });
+      });
 
-        await client.connect();
+      startBtn.addEventListener("click", () => {
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+
+        client.start({
+          // destinationType: 'mp4',
+          destination: "test.mp4",
+        });
+
+        videoElement.play();
+      });
+
+      stopBtn.addEventListener("click", () => {
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+
+        client.stop();
+        videoElement.pause();
       });
 
       disconnectBtn.addEventListener("click", () => {
@@ -69,6 +81,8 @@
           client.disconnect();
           connectBtn.disabled = false;
           disconnectBtn.disabled = true;
+          startBtn.disabled = true;
+          stopBtn.disabled = true;
           videoElement.pause();
         }
       });
