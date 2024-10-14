@@ -1,6 +1,6 @@
 {
   "name": "glock-server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Glock is a Browser/Node.js library that allows you to transport AV stream over UDP to a server via WebRTC.",
   "repository": {
     "type": "git",

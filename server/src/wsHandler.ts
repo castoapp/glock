@@ -1,7 +1,7 @@
 import { WebSocket, WebSocketServer } from "ws";
 import { IncomingMessage } from "http";
 import Server from "./server.js";
-import { parseJSON } from "./utils.js";
+import { parseJSON } from "./utils/index.js";
 import { WRTCHandler } from "./wrtcHandler.js";
 
 const debug = process.env.DEBUG === "true";

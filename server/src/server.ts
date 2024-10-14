@@ -1,7 +1,7 @@
 import { WebSocketServer } from "ws";
 import events from "events";
 import WSHandler from "./wsHandler.js";
-import { DEFAULT_ICE_SERVERS, DEFAULT_MAX_PACKET_SIZE } from "./utils.js";
+import { DEFAULT_ICE_SERVERS, DEFAULT_MAX_PACKET_SIZE } from "./defaults.js";
 
 interface ServerOptions {
   maxPacketSize?: number;

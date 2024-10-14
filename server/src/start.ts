@@ -9,14 +9,15 @@ dotenv.config();
 import { WebSocketServer } from "ws";
 import { Server, AV } from "./index.js";
 import {
-  arrayBufferToJSON,
   DEFAULT_CHUNK_WAIT_CHECK_INTERVAL,
   DEFAULT_CHUNK_WAIT_TIMEOUT,
   DEFAULT_ICE_SERVERS,
   DEFAULT_MAX_PACKET_SIZE,
-} from "./utils.js";
+} from "./defaults.js";
+import { arrayBufferToJSON } from "./utils/index.js";
 
 import { Client } from "./wsHandler.js";
+import { StreamConfig } from "./av/types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -67,7 +68,7 @@ server.on("packet", async (header: number, data: Buffer, client: Client) => {
 
   if (header === 0x10) {
     // Parse the config payload
-    const payload = arrayBufferToJSON(data);
+    const payload = arrayBufferToJSON(data) as Partial<StreamConfig>;
     if (debug) console.info("[Glock] Received AV stream start", payload);
 
     // Initialize the AV instance

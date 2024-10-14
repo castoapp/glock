@@ -1,7 +1,7 @@
 import { PeerConnection, DataChannel } from "node-datachannel";
 import type Server from "./server.js";
 import { WebSocket } from "ws";
-import { DEFAULT_ICE_SERVERS, stringifyJSON } from "./utils.js";
+import { stringifyJSON } from "./utils/index.js";
 import { Client } from "./wsHandler.js";
 
 const debug = process.env.DEBUG === "true";
