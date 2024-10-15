@@ -14,10 +14,10 @@
     "dist"
   ],
   "scripts": {
-    "build": "npx tsc -p tsconfig.json && yarn generate:docs",
+    "build": "npx tsc -p tsconfig.json",
     "serve": "http-server .",
     "publish": "cp ../LICENSE . && cp ../README.md . && yarn run build && npm publish && rm LICENSE && rm README.md",
-    "generate:docs": "npx typedoc src/client.ts --name Glock --basePath './'"
+    "build:doc": "npx typedoc src/client.ts --name Glock --basePath './'"
   },
   "dependencies": {},
   "devDependencies": {

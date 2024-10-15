@@ -10,7 +10,7 @@
     <br />
     <a href="https://casto.app">
       <b>casto.app</b>
-    </a> | <a href="https://glockio.github.io/docs/"><b>documentation</b></a>
+    </a> | <a href="https://glock.casto.app/"><b>documentation</b></a>
     <br />
   </p>
 </p>
@@ -87,7 +87,7 @@ AUTH_KEY=<your-secret-auth-key> docker compose up
 
 ## Documentation
 
-See the [https://glockio.github.io/docs/](docs) for more detailed documentation.
+See the [https://glock.casto.app/](docs) for more detailed documentation.
 
 ## License
 
