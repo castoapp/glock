@@ -87,7 +87,7 @@ AUTH_KEY=<your-secret-auth-key> docker compose up
 
 ## Documentation
 
-See the [https://glock.casto.app/](docs) for more detailed documentation.
+See the [docs](https://glock.casto.app/) for more detailed documentation.
 
 ## License
 
