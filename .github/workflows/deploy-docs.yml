@@ -39,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          pnpm install --frozen-lockfile
+          pnpm install
 
       - id: "build"
         name: "Build documentation"
