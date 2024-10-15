@@ -1,3 +1,4 @@
 import FFmpegProcessor from "./ffmpeg.js";
+import GStreamerProcessor from "./gstreamer.js";
 
-export { FFmpegProcessor };
+export { FFmpegProcessor, GStreamerProcessor };

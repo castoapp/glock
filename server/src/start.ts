@@ -68,14 +68,19 @@ server.on("packet", async (header: number, data: Buffer, client: Client) => {
 
   if (header === 0x10) {
     // Parse the config payload
-    const payload = arrayBufferToJSON(data) as Partial<StreamConfig>;
+    const payload = arrayBufferToJSON(data) as StreamConfig;
     if (debug) console.info("[Glock] Received AV stream start", payload);
 
     // Initialize the AV instance
-    const av = new AV(client, { chunkWaitTimeout, chunkWaitCheckInterval });
+    const av = new AV(client, payload, {
+      chunkWaitTimeout,
+      chunkWaitCheckInterval,
+    });
     avInstances.set(client, av);
 
     av.once("timeout", () => {
+      console.info("[Glock] [av] AV stream timeout");
+
       // Delete the AV instance if the chunk wait times out
       avInstances.delete(client);
 
@@ -83,16 +88,16 @@ server.on("packet", async (header: number, data: Buffer, client: Client) => {
       client.wrtcHandler.sendHeader(0x36);
     });
 
-    // Start the AV stream
-    await av.start(payload);
-
     // Send the AV stream ready header
     av.once("ready", () => {
-      if (debug) console.debug("[Glock] AV stream ready");
+      if (debug) console.info("[Glock] AV stream ready");
 
       // 0x34 = AV stream ready
       client.wrtcHandler.sendHeader(0x34);
     });
+
+    // Start the AV stream
+    await av.start();
   } else if (header === 0x41) {
     if (debug) console.info("[Glock] Received AV chunk");
 

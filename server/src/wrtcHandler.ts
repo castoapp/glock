@@ -73,7 +73,10 @@ export class WRTCHandler {
           // Emit the packet
           this.server.emit("packet", header, msg.slice(1), client);
         } catch (error) {
-          console.error("Error processing packet:", error);
+          console.error(
+            "[Glock] [wrtcHandler] Error processing packet:",
+            error
+          );
         }
       });
     });
@@ -150,7 +153,7 @@ export class WRTCHandler {
       this.dataChannel?.sendMessageBinary(packet);
 
       if (debug)
-        console.info(`[Glock] packet_sent: ${header} ${data.size} bytes`);
+        console.info(`[Glock] packet sent: ${header} ${data.size} bytes`);
     }
   }
 
@@ -161,7 +164,7 @@ export class WRTCHandler {
   public async sendHeader(header: number) {
     if (this.dataChannel?.isOpen()) {
       this.dataChannel?.sendMessageBinary(new Uint8Array([header]));
-      if (debug) console.info(`[Glock] header_sent: ${header} 1 bytes`);
+      if (debug) console.info(`[Glock] header sent: ${header} 1 bytes`);
     }
   }
 

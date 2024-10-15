@@ -1,18 +1,12 @@
-export interface StreamConfig {
-  destinationType: string | null;
-  destination: string;
-  vcodec: string;
-  preset: string;
-  vbitrate: string;
-  abitrate: string;
-  acodec: string;
-  fps: string;
-  scale: string | null;
-}
+import { DEFAULT_FF_AV_CONFIG, DEFAULT_GST_AV_CONFIG } from "../defaults.js";
+
+export type StreamConfig =
+  | typeof DEFAULT_FF_AV_CONFIG
+  | typeof DEFAULT_GST_AV_CONFIG;
 
 export interface VideoProcessor {
   isRunning(): boolean;
-  start(config: Partial<StreamConfig>): Promise<void>;
+  start(): Promise<void>;
   processChunk(data: Buffer): Promise<void>;
   stop(): Promise<void>;
 }

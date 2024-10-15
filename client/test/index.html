@@ -40,7 +40,7 @@
 
         // Replace with your actual WebSocket server URL and auth key
         client = new Client("ws://localhost:8080", stream, {
-          debug: true,
+          debug: false,
           authKey: "your-secret-auth-key",
         });
 
@@ -61,8 +61,12 @@
         stopBtn.disabled = false;
 
         client.start({
-          // destinationType: 'mp4',
-          destination: "test.mp4",
+          destination: {
+            type: "file",
+            path: "output.mp4",
+          },
+          chunkLengthTime: 500,
+          processor: "ffmpeg",
         });
 
         videoElement.play();

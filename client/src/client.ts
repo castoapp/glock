@@ -9,27 +9,51 @@ import {
   Status,
 } from "./utils.js";
 
+/**
+ * Configuration for the stream processing and output.
+ * @interface StreamConfig
+ */
 export interface StreamConfig {
-  // Destination type: flv, mp4, etc.
-  destinationType?: string;
-  // Destination URL/path
-  destination: string;
-  // MediaRecorder bitrate (default: 1500000)
+  /** Processor to use: "ffmpeg" or "gstreamer" */
+  processor?: "ffmpeg" | "gstreamer";
+
+  /** Destination configuration */
+  destination?: {
+    /** Destination type: "file" or "rtmp" */
+    type?: "file" | "rtmp";
+    /** Path or URL for the destination */
+    path?: string;
+  };
+
+  /** Encoder configuration */
+  encoder?: {
+    /** Video encoding options */
+    video?: {
+      /** Video codec to use */
+      codec?: string;
+      /** Encoding preset (e.g., "ultrafast", "medium", "slow") */
+      preset?: string;
+      /** Video bitrate in bits per second */
+      bitrate?: number;
+      /** Frames per second */
+      fps?: number;
+    };
+
+    /** Audio encoding options */
+    audio?: {
+      /** Audio bitrate in bits per second */
+      bitrate?: number;
+      /** Audio sample rate in Hz */
+      sampleRate?: number;
+      /** Audio codec to use */
+      codec?: string;
+    };
+  };
+
+  /** MediaRecorder bitrate in bits per second (default: 1500000) */
   recorderBitrate?: number;
-  // Force a specific MIME type for the MediaRecorder
+  /** Force a specific MIME type for the MediaRecorder */
   forceMimeType?: string;
-  // Video codec (default: libx264)
-  vcodec?: string;
-  // Audio codec (default: aac)
-  acodec?: string;
-  // Video bitrate (default: 6000k)
-  vbitrate?: number;
-  // Audio bitrate (default: 192k)
-  abitrate?: number;
-  // FPS (default: 30)
-  fps?: number;
-  // Resolution (default: 1920x1080)
-  resolution?: string;
 }
 
 interface ClientConfig {
@@ -70,6 +94,8 @@ export default class Client extends EventTarget {
      * @param debug - Debug mode (default: false)
      * @param authKey - Authentication key (default: empty string)
      * @param bufferSize - Chunks buffer size (default: 5)
+     * @param chunkLengthTime - Chunk length time in milliseconds (default: 200)
+     * @param chunkSize - Chunk size in bytes (default: 101 KB)
      */
     public options: ClientConfig = {}
   ) {
@@ -152,6 +178,7 @@ export default class Client extends EventTarget {
 
     // Set the stream config
     this.streamConfig = streamConfig;
+
     // Send: 0x10 = AV stream start
     if (
       this.webRTCManager &&
@@ -244,6 +271,7 @@ export default class Client extends EventTarget {
           "bytes"
         );
       }
+
       this.addToBuffer(event.data);
     } else if (this.options.debug) {
       console.log("[Glock] No video data available in this event");

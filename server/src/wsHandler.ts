@@ -1,4 +1,5 @@
 import { WebSocket, WebSocketServer } from "ws";
+import chalk from "chalk";
 import { IncomingMessage } from "http";
 import Server from "./server.js";
 import { parseJSON } from "./utils/index.js";
@@ -31,7 +32,7 @@ export default class WSHandler {
    * @param request - The request object
    */
   private onConnected(socket: WebSocket, request: IncomingMessage) {
-    console.log("[Glock] [wsHandler] connection established");
+    console.log(chalk.green("[Glock] [wsHandler] client connected"));
 
     // Verify authentication key
     if (!this.verifyAuthKey(request))
@@ -51,7 +52,8 @@ export default class WSHandler {
    * @param data - The message data
    */
   private async onMessage(data: string, client: Client) {
-    if (debug) console.log("[Glock] [wsHandler] message received", data);
+    if (debug)
+      console.log(chalk.blue("[Glock] [wsHandler] message received"), data);
 
     const payload = await parseJSON<{
       type: string;
@@ -70,7 +72,7 @@ export default class WSHandler {
    * @param socket - The WebSocket client instance
    */
   private onDisconnected(socket: WebSocket) {
-    console.log("[Glock] [wsHandler] connection closed");
+    console.log(chalk.red("[Glock] [wsHandler] client disconnected"));
 
     // Get client
     const client = this.clients.get(socket);

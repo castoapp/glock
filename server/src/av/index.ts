@@ -1,12 +1,14 @@
 import EventEmitter from "events";
+import chalk from "chalk";
 import { Client } from "../wsHandler.js";
 import {
+  DEFAULT_AV_PROCESSOR,
   DEFAULT_CHUNK_WAIT_CHECK_INTERVAL,
   DEFAULT_CHUNK_WAIT_TIMEOUT,
 } from "../defaults.js";
 import { stringifyJSON } from "../utils/json.js";
 import { StreamConfig, VideoProcessor } from "./types.js";
-import { FFmpegProcessor } from "./processors/index.js";
+import { FFmpegProcessor, GStreamerProcessor } from "./processors/index.js";
 
 const debug = process.env.DEBUG === "true";
 
@@ -25,15 +27,27 @@ export default class AV extends EventEmitter {
   private frameQueue: Buffer[] = [];
   private isProcessingFrame: boolean = false;
 
-  constructor(private client: Client, public options: Options = {}) {
+  constructor(
+    private client: Client,
+    public streamConfig: StreamConfig,
+    public options: Options = {}
+  ) {
     super();
 
+    this.streamConfig.processor =
+      this.streamConfig.processor || DEFAULT_AV_PROCESSOR;
     this.options.chunkWaitTimeout =
       options.chunkWaitTimeout || DEFAULT_CHUNK_WAIT_TIMEOUT;
     this.options.chunkWaitCheckInterval =
       options.chunkWaitCheckInterval || DEFAULT_CHUNK_WAIT_CHECK_INTERVAL;
 
-    this.videoProcessor = new FFmpegProcessor(
+    const choosenProcessor =
+      this.streamConfig.processor === "gstreamer"
+        ? GStreamerProcessor
+        : FFmpegProcessor;
+
+    this.videoProcessor = new choosenProcessor(
+      this.streamConfig,
       this.onProcessorReady.bind(this),
       this.onProcessorStats.bind(this),
       this.onProcessorError.bind(this)
@@ -43,6 +57,7 @@ export default class AV extends EventEmitter {
   private onProcessorReady() {
     this.isReady = true;
     this.emit("ready");
+    if (debug) console.info("[Glock] [av] VideoProcessor is ready");
   }
 
   private onProcessorError(error: Error) {
@@ -59,12 +74,10 @@ export default class AV extends EventEmitter {
     );
   }
 
-  public async start(config: Partial<StreamConfig> = {}) {
+  public async start() {
     if (this.videoProcessor.isRunning()) {
       throw new Error("Video processor is already running");
     }
-
-    console.info("[Glock] Config", config);
 
     this.lastChunkTime = Date.now();
     this.chunkWaitCheckInterval = setInterval(
@@ -73,10 +86,16 @@ export default class AV extends EventEmitter {
     );
 
     // Set frame interval based on config fps
-    this.frameInterval = 1000 / parseInt(config.fps || "30");
+    this.frameInterval = 1000 / (this.streamConfig.encoder?.video?.fps || 30);
     this.lastFrameTime = Date.now();
 
-    await this.videoProcessor.start(config);
+    try {
+      await this.videoProcessor.start();
+      console.info(chalk.green("[Glock] [av] Stream started"));
+    } catch (error) {
+      console.error("[Glock] [av] Failed to start video processor", error);
+      this.client.wrtcHandler.sendHeader(0x35); // 0x35 = AV stream start error
+    }
   }
 
   public async put(data: Buffer) {
@@ -84,7 +103,6 @@ export default class AV extends EventEmitter {
 
     if (!this.videoProcessor.isRunning()) {
       console.error("[Glock] Video processor is not running");
-      this.client.wrtcHandler.sendHeader(0x35); // 0x35 = AV stream start error
       return;
     }
 
@@ -98,7 +116,7 @@ export default class AV extends EventEmitter {
   }
 
   private async processNextFrame() {
-    if (this.frameQueue.length === 0) {
+    if (!this.videoProcessor.isRunning() || this.frameQueue.length === 0) {
       this.isProcessingFrame = false;
       return;
     }
@@ -144,5 +162,6 @@ export default class AV extends EventEmitter {
     this.frameInterval = 0;
     this.lastFrameTime = 0;
     await this.videoProcessor.stop();
+    console.info(chalk.red("[Glock] [av] Stream stopped"));
   }
 }

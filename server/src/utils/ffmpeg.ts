@@ -175,3 +175,8 @@ function parseSize(sizeString: string): number {
   const [, size, unit = ""] = match;
   return parseFloat(size) * (sizeUnits[unit.toLowerCase()] || 1 / 1024);
 }
+
+export function getFFmpegDestType(type: string | null) {
+  if (type === "rtmp") return "flv";
+  return null;
+}

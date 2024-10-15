@@ -10,7 +10,7 @@
     <br />
     <a href="https://casto.app">
       <b>casto.app</b>
-    </a>
+    </a> | <a href="https://glockio.github.io/docs/"><b>documentation</b></a>
     <br />
   </p>
 </p>
@@ -21,9 +21,10 @@
 
 - Client library (compatible with browsers and Electron)
 - Node.js server application deployable with Docker Compose
+- Works with **FFmpeg** and **GStreamer** _(experimental)_
 - Stream transmission using WebRTC (UDP) for low latency
 - Fallback option using WebSocket (TCP) **TODO**
-- Direct transmission of AV stream to any FFmpeg-supported output
+- Direct transmission of AV stream to any FFmpeg-supported or GStreamer-supported output
 - Configurable video encoding parameters **TODO**
 - Automatic buffer size adjustment for optimal performance
 
@@ -59,16 +60,17 @@ const stream = video.captureStream(30);
 client = new Client("ws://127.0.0.1:8080", stream, {
   debug: false,
   authKey: "your-secret-auth-key",
-  /// ... see other options
+  /// ... see other options in the docs
 });
 
 // Connect to the server
 client.connect().then(() => {
   // Start streaming to the destination
   client.start({
-    destinationType: "flv",
-    destination: "rtmp://a.rtmp.youtube.com/live2/<key>",
-    // ... see other options
+    destinationType: "file",
+    destination: "video.mp4",
+    processor: "ffmpeg", // or "gstreamer"
+    // ... see other options in the docs
   });
 });
 ```
@@ -85,7 +87,7 @@ AUTH_KEY=<your-secret-auth-key> docker compose up
 
 ## Documentation
 
-See the [wiki](https://github.com/castoapp/glock/wiki) for more detailed documentation.
+See the [https://glockio.github.io/docs/](docs) for more detailed documentation.
 
 ## License
 

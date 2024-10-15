@@ -2,66 +2,55 @@ import { ChildProcess, spawn } from "child_process";
 import pathToFfmpeg from "ffmpeg-static/index.js";
 import { parseFFmpegOutput } from "../../utils/index.js";
 import { VideoProcessor, StreamConfig } from "../types.js";
+import { DEFAULT_FF_AV_CONFIG } from "../../defaults.js";
+import { getFFmpegDestType } from "../../utils/ffmpeg.js";
 
 const debug = process.env.DEBUG === "true";
 
-const defaultStreamConfig: StreamConfig = {
-  destinationType: null,
-  destination: "pipe:1",
-  vcodec: "libx264",
-  preset: "p4",
-  vbitrate: "6000k",
-  abitrate: "192k",
-  acodec: "aac",
-  fps: "30",
-  scale: null,
-};
-
 export default class FFmpegProcessor implements VideoProcessor {
+  private args: string[] = [];
   private process: ChildProcess | null = null;
 
   constructor(
+    public streamConfig: StreamConfig,
     private onReady: () => void,
     private onStats: (stats: any) => void,
     private onError: (error: Error) => void
-  ) {}
+  ) {
+    if (this.process) throw new Error("FFmpeg process is already running");
+    if (!pathToFfmpeg) throw new Error("FFmpeg binary not found");
 
-  public isRunning(): boolean {
-    return this.process !== null;
+    // Merge the default stream config with the provided stream config
+    const mergedConfig = { ...DEFAULT_FF_AV_CONFIG, ...this.streamConfig };
+    this.args = this.buildFFmpegArgs(mergedConfig);
   }
 
-  public async start(config: Partial<StreamConfig> = {}): Promise<void> {
-    if (this.process) {
-      throw new Error("FFmpeg process is already running");
-    }
-
-    if (!pathToFfmpeg) {
-      throw new Error("FFmpeg binary not found");
-    }
-
-    const mergedConfig = { ...defaultStreamConfig, ...config };
-    const args = this.buildFFmpegArgs(mergedConfig);
-
-    console.info("[Glock] FFmpeg args", args);
-
-    this.process = spawn(pathToFfmpeg, args);
-
+  public async start(): Promise<void> {
+    // Start the FFmpeg process
+    this.process = spawn(pathToFfmpeg, this.args);
+    // Setup process listeners
     this.setupProcessListeners();
   }
 
   private buildFFmpegArgs(config: StreamConfig): string[] {
+    const { encoder, destination } = config;
+    const destType = getFFmpegDestType(destination.type);
+    const audioEncoderCodec = encoder.audio.codec as string;
+
     const args = [
       "-i",
       "pipe:0", // Input from stdin
       "-f",
       "mpegts", // Output format: MPEG-TS
       "-c:v",
-      config.vcodec, // Video codec
+      encoder.video.codec, // Video codec
     ];
 
-    const gopSize = Math.round(parseFloat(config.fps) * 2); // 2 seconds worth of frames
+    // Calculate GOP size based on FPS
+    // 2 seconds worth of frames
+    const gopSize = Math.round(encoder.video.fps * 2).toString();
 
-    if (config.vcodec === "libx264") {
+    if (encoder.video.codec === "libx264") {
       args.push(
         "-preset",
         "veryfast", // Encoding speed preset
@@ -70,19 +59,19 @@ export default class FFmpegProcessor implements VideoProcessor {
         "-crf",
         "23", // Constant Rate Factor (balance between quality and file size)
         "-maxrate",
-        config.vbitrate, // Use config.vbitrate instead of hardcoded value
+        `${encoder.video.bitrate}k`, // Use config.vbitrate instead of hardcoded value
         "-bufsize",
-        `${parseInt(config.vbitrate) * 2}k`, // Double the maxrate for bufsize
+        `${encoder.video.bitrate * 2}k`, // Double the maxrate for bufsize
         "-g",
-        gopSize.toString(), // GOP size (interval between keyframes)
+        gopSize, // GOP size (interval between keyframes)
         "-sc_threshold",
         "0", // Disable scene change detection
         "-threads",
         "0" // Use all available CPU threads
       );
     } else if (
-      config.vcodec === "h264_nvenc" ||
-      config.vcodec === "hevc_nvenc"
+      encoder.video.codec === "h264_nvenc" ||
+      encoder.video.codec === "hevc_nvenc"
     ) {
       args.push(
         "-preset",
@@ -98,13 +87,13 @@ export default class FFmpegProcessor implements VideoProcessor {
         "-qmax",
         "51", // Maximum quantization parameter
         "-b:v",
-        config.vbitrate, // Target video bitrate
+        `${encoder.video.bitrate}k`, // Target video bitrate
         "-maxrate",
-        config.vbitrate, // Use config.vbitrate instead of hardcoded value
+        `${encoder.video.bitrate}k`, // Use config.vbitrate instead of hardcoded value
         "-bufsize",
-        `${parseInt(config.vbitrate) * 2}k`, // Double the maxrate for bufsize
+        `${encoder.video.bitrate * 2}k`, // Double the maxrate for bufsize
         "-g",
-        gopSize.toString(), // GOP size
+        gopSize, // GOP size
         "-sc_threshold",
         "0", // Disable scene change detection
         "-i_qfactor",
@@ -116,13 +105,13 @@ export default class FFmpegProcessor implements VideoProcessor {
 
     args.push(
       "-c:a",
-      config.acodec, // Audio codec
+      audioEncoderCodec, // Audio codec
       "-b:a",
-      config.abitrate, // Audio bitrate
+      `${encoder.audio.bitrate}`, // Audio bitrate
       "-ar",
-      "48000", // Audio sample rate
+      `${encoder.audio.sampleRate}`, // Audio sample rate
       "-filter_complex",
-      `[0:v]fps=${config.fps},format=yuv420p[v];[0:a]aresample=async=1[a]`, // Video and audio filtering
+      `[0:v]fps=${encoder.video.fps},format=yuv420p[v];[0:a]aresample=async=1[a]`, // Video and audio filtering
       "-map",
       "[v]", // Map filtered video to output
       "-map",
@@ -133,51 +122,39 @@ export default class FFmpegProcessor implements VideoProcessor {
       "1024" // Increase muxing queue size to avoid errors
     );
 
-    if (config.scale) {
-      args.push("-vf", `scale=${config.scale}`); // Scale video if specified
-    }
+    if (destType) args.push("-f", destType); // Output format if specified
+    args.push(destination.path ?? "pipe:1"); // Output destination (stdout if not specified)
 
-    if (config.destinationType) args.push("-f", config.destinationType); // Output format if specified
-    args.push(config.destination ?? "pipe:1"); // Output destination (stdout if not specified)
-
-    return args;
+    if (debug) console.log("[Glock] [av -> ffmpeg] args:", args.join(" "));
+    return args as string[];
   }
 
   private setupProcessListeners() {
-    this.process!.stdout?.on("data", (data) => {
-      console.log(`stdout: ${data}`);
-    });
+    this.process!.stdout?.on("data", this.onStdout.bind(this));
+    this.process!.stderr?.on("data", this.onStderr.bind(this));
+    this.process!.stdin?.on("error", (error) => this.onError(error));
+    this.process!.on("close", this.onClose.bind(this));
+  }
 
-    this.process!.stderr?.on("data", (data) => {
-      const stats = parseFFmpegOutput(data.toString());
+  private onStdout(data: Buffer): void {
+    if (debug) console.log(`[Glock] [av -> ffmpeg] stdout: ${data}`);
+  }
 
-      if (stats.progress) {
-        this.onStats(stats.progress);
-      }
+  private onStderr(data: Buffer): void {
+    const stats = parseFFmpegOutput(data.toString());
+    if (stats.progress) this.onStats(stats.progress);
+    if (stats.version) this.onReady();
+    if (stats.error) this.onError(new Error(stats.error));
+    if (debug) console.log(`[Glock] [av -> ffmpeg] stderr: ${data}`);
+  }
 
-      if (stats.version) {
-        this.onReady();
-      }
-
-      if (stats.error) {
-        this.onError(new Error(stats.error));
-      }
-
-      console.info(data.toString());
-    });
-
-    this.process!.on("error", (error) => {
-      console.error(`FFmpeg process error: ${error.message}`);
-    });
-
-    this.process!.on("close", (code, signal) => {
-      if (debug) {
-        console.info(
-          `[Glock] FFmpeg process closed with code ${code} and signal ${signal}`
-        );
-      }
-      this.process = null;
-    });
+  private onClose(code: number, signal: string) {
+    if (debug) {
+      console.info(
+        `[Glock] [av -> ffmpeg] closed: code ${code} signal ${signal}`
+      );
+    }
+    this.process = null;
   }
 
   public async processChunk(data: Buffer): Promise<void> {
@@ -201,17 +178,21 @@ export default class FFmpegProcessor implements VideoProcessor {
 
   public async stop(): Promise<void> {
     if (!this.process) {
-      if (debug) console.warn("[Glock] No FFmpeg process to stop");
+      if (debug) console.warn("[Glock] [av -> ffmpeg] not running!");
       return;
     }
 
     return new Promise<void>((resolve) => {
       this.process!.once("exit", () => {
-        console.info("[Glock] FFmpeg process exited");
+        if (debug) console.info("[Glock] [av -> ffmpeg] exited");
         this.process = null;
         resolve();
       });
       this.process!.kill("SIGINT");
     });
+  }
+
+  public isRunning(): boolean {
+    return this.process !== null && this.process!.pid !== undefined;
   }
 }

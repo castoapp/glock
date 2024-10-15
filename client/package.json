@@ -1,6 +1,6 @@
 {
   "name": "glockio",
-  "version": "0.1.0",
+  "version": "0.1.5",
   "description": "Glock is a comprehensive solution consisting of a client library and a server application designed to transmit AV stream from a browser to any output destination using FFmpeg.",
   "repository": {
     "type": "git",
@@ -14,13 +14,15 @@
     "dist"
   ],
   "scripts": {
-    "build": "npx tsc -p tsconfig.json",
+    "build": "npx tsc -p tsconfig.json && yarn generate:docs",
     "serve": "http-server .",
-    "publish": "cp ../LICENSE . && cp ../README.md . && npm run build && npm publish && rm LICENSE && rm README.md"
+    "publish": "cp ../LICENSE . && cp ../README.md . && yarn run build && npm publish && rm LICENSE && rm README.md",
+    "generate:docs": "npx typedoc src/client.ts --name Glock --basePath './'"
   },
   "dependencies": {},
   "devDependencies": {
     "ts-node": "^10.9.2",
+    "typedoc": "^0.26.9",
     "typescript": "^5.6.3"
   }
 }
