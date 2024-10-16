@@ -67,9 +67,11 @@ client = new Client("ws://127.0.0.1:8080", stream, {
 client.connect().then(() => {
   // Start streaming to the destination
   client.start({
-    destinationType: "file",
-    destination: "video.mp4",
-    processor: "ffmpeg", // or "gstreamer"
+    destination: {
+        type: "file",
+        path: "video.mp4",
+    },
+    processor: "ffmpeg", // or "gstreamer",
     // ... see other options in the docs
   });
 });
